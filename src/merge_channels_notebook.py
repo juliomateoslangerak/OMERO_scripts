@@ -24,7 +24,6 @@ def _(mo):
         
         {connection_parameters}
         {data_parameters}
-        {analysis_parameters}
         """
         )
         .batch(
@@ -46,7 +45,7 @@ def _(mo):
                         step=1,
                         label="OMERO port",
                     ),
-                    "omero_group": mo.ui.text(value="CND project", label="Group"),
+                    "omero_group": mo.ui.text(value="Dorade project", label="Group"),
                     "connection_secured": mo.ui.checkbox(
                         value=True,
                         label="Secured connection",
@@ -57,51 +56,40 @@ def _(mo):
                 label="Data parameters",
                 elements={
                     "dataset_id": mo.ui.number(start=1, step=1, label="Dataset ID"),
-                    "image_name_filter": mo.ui.text(
-                        value="SIR.dv",
-                        label="Image name filter",
+                    "image_name_include_filter": mo.ui.text(
+                        value="_cmle.ics",
+                        label="Image name include filter",
                     ),
-                    "delete_preexisting_rois": mo.ui.checkbox(
-                        value=True,
-                        label="Delete preexisting ROIs",
+                    "image_name_exclude_filter": mo.ui.text(
+                        value="_MRG",
+                        label="Image name exclude filter",
                     ),
-                    "rescale_images": mo.ui.checkbox(
+                    "delete_preexisting_merges": mo.ui.checkbox(
+                        value=False,
+                        label="Delete preexisting merges (use with caution)",
+                    ),
+                    "rescale_channels": mo.ui.checkbox(
                         value=True,
                         label="Rescale source images",
                     ),
-                    "create_preview_mip": mo.ui.checkbox(
-                        value=True,
-                        label="Create preview MIP",
-                    ),
-                },
-            ),
-            analysis_parameters=mo.ui.dictionary(
-                label="Analysis parameters",
-                elements={
-                    "min_sigma": mo.ui.number(
-                        value=10.0,
-                        label="Min sigma",
-                        start=1.0,
-                        stop=100.0,
-                    ),
-                    "max_sigma": mo.ui.number(
-                        value=80.0,
-                        label="Max sigma",
-                        start=2.0,
-                        stop=200.0,
-                    ),
-                    "channel": mo.ui.number(
+                    "rescale_ch1_min": mo.ui.number(
                         value=0,
-                        label="Channel to analyze",
-                        start=0,
-                        stop=100,
+                        label="Rescale channel 1 min",
                         step=1,
                     ),
-                    "border_to_exclude": mo.ui.number(
-                        value=30,
-                        label="Border exclusion size (Not implemented)",
-                        start=0,
-                        stop=200,
+                    "rescale_ch1_max": mo.ui.number(
+                        value=10000,
+                        label="Rescale channel 1 max",
+                        step=1,
+                    ),
+                    "rescale_ch2_min": mo.ui.number(
+                        value=0,
+                        label="Rescale channel 2 min",
+                        step=1,
+                    ),
+                    "rescale_ch2_max": mo.ui.number(
+                        value=10000,
+                        label="Rescale channel 2 max",
                         step=1,
                     ),
                 },
@@ -127,7 +115,6 @@ def _(
     else:
         conn_params = analysis_form.value["connection_parameters"]
         data_params = analysis_form.value["data_parameters"]
-        analysis_params = analysis_form.value["analysis_parameters"]
 
         with mo.status.spinner(title="Connecting to OMERO...") as _spinner:
             conn = omero_tb.open_connection(
@@ -145,8 +132,6 @@ def _(
                 _spinner.update("Failed to connect to OMERO.")
                 raise Exception("Connection failed")
 
-            roi_service = conn.getRoiService()
-
             try:
                 dataset = omero_tb.get_dataset(
                     connection=conn, dataset_id=data_params["dataset_id"]
@@ -156,20 +141,16 @@ def _(
                 for image in dataset_images:
                     image_name = image.getName()
                     _spinner.update(f"Analyzing: {image_name}")
-                    if not image_name.endswith(data_params["image_name_filter"]):
+                    if not data_params["image_name_include_filter"] in image_name:
                         continue
-                    if data_params["delete_preexisting_rois"]:
-                        preexisting_rois = roi_service.findByImage(
-                            image.getId(), None
-                        )
-                        if preexisting_rois := list(preexisting_rois.rois):
-                            omero_tb.delete_rois(conn, preexisting_rois)
-                    raw_image_data = omero_tb.get_intensities(
-                        image, c_range=analysis_params["channel"]
-                    )
-                    raw_image_data = np.squeeze(raw_image_data)
+                    if data_params["image_name_exclude_filter"] in image_name:
+                        if data_params["delete_preexisting_merges"]:
+                            omero_tb.delete_image(conn, image)
+                        continue
 
-                    if data_params["rescale_images"]:
+                    raw_image_data = omero_tb.get_intensities(image)  # zctyx
+
+                    if data_params["rescale_channels"]:
                         image_data = analysis_functions.rescale_SIM(
                             raw_image_data, out_range="uint16"
                         )

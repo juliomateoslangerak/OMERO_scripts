@@ -41,5 +41,5 @@ EXPOSE 8888
 ENV MARIMO_HOST=0.0.0.0
 ENV MARIMO_PORT=8888
 
-# Default command: run find_rois_notebook.py with marimo
-CMD ["marimo", "edit", "--host", "0.0.0.0", "--port", "8888", "--no-token", "src/find_rois_notebook.py"]
+# Default command: run merge_channels_notebook.py with marimo
+CMD ["marimo", "edit", "--host", "0.0.0.0", "--port", "8888", "--no-token", "src/merge_channels_notebook.py"]

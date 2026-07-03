@@ -750,6 +750,17 @@ def delete_rois(conn, rois):
     )
 
 
+def delete_image(conn, image, delete_annotations=True, delete_children=True):
+    _delete_object(
+        conn=conn,
+        object_type="Image",
+        objects=[image],
+        delete_annotations=delete_annotations,
+        delete_children=delete_children,
+        wait=True,
+    )
+
+
 # Retrieve callback and wait until delete completes
 
 # # This is not necessary for the Delete to complete. Can be used

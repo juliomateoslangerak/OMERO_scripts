@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/OMERO_scripts.iml" filepath="$PROJECT_DIR$/.idea/OMERO_scripts.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/omero_scripts.iml" filepath="$PROJECT_DIR$/.idea/omero_scripts.iml" />
     </modules>
   </component>
 </project>
