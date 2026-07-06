@@ -68,28 +68,38 @@ def _(mo):
                         value=False,
                         label="Delete preexisting merges (use with caution)",
                     ),
+                    "ch_a": mo.ui.number(
+                        value=1,
+                        label="Channel a (first channel is 0)",
+                        step=1,
+                    ),
+                    "ch_b": mo.ui.number(
+                        value=3,
+                        label="Channel b (first channel is 0)",
+                        step=1,
+                    ),
                     "rescale_channels": mo.ui.checkbox(
                         value=True,
                         label="Rescale source images",
                     ),
-                    "rescale_ch1_min": mo.ui.number(
+                    "rescale_cha_min": mo.ui.number(
                         value=0,
-                        label="Rescale channel 1 min",
+                        label="Rescale channel a min",
                         step=1,
                     ),
-                    "rescale_ch1_max": mo.ui.number(
+                    "rescale_cha_max": mo.ui.number(
                         value=10000,
-                        label="Rescale channel 1 max",
+                        label="Rescale channel a max",
                         step=1,
                     ),
-                    "rescale_ch2_min": mo.ui.number(
+                    "rescale_chb_min": mo.ui.number(
                         value=0,
-                        label="Rescale channel 2 min",
+                        label="Rescale channel b min",
                         step=1,
                     ),
-                    "rescale_ch2_max": mo.ui.number(
+                    "rescale_chb_max": mo.ui.number(
                         value=10000,
-                        label="Rescale channel 2 max",
+                        label="Rescale channel b max",
                         step=1,
                     ),
                 },
@@ -150,74 +160,24 @@ def _(
 
                     raw_image_data = omero_tb.get_intensities(image)  # zctyx
 
-                    if data_params["rescale_channels"]:
-                        image_data = analysis_functions.rescale_SIM(
-                            raw_image_data, out_range="uint16"
-                        )
-
-                    spots = analysis_functions.find_spots(
-                        raw_image_data,
-                        min_sigma=analysis_params["min_sigma"],
-                        max_sigma=analysis_params["max_sigma"],
+                    merged_channel = analysis_functions.merge_channels(
+                        raw_image_data[:, data_params["ch_a"],...],
+                        raw_image_data[:, data_params["ch_b"],...],
+                        range_a=(data_params["rescale_cha_min"], data_params["rescale_cha_max"]),
+                        range_b=(data_params["rescale_chb_min"], data_params["rescale_chb_max"]),
+                        rescale=data_params["rescale_channels"]
                     )
 
-                    if len(spots):
-                        points_with_zc = []
-                        points_with_z = []
-                        points_preview = []
-                        for i, spot in enumerate(spots):
-                            points_with_zc.append(
-                                omero_tb.create_shape_point(
-                                    x_pos=spot[2],
-                                    y_pos=spot[1],
-                                    z_pos=spot[0],
-                                    c_pos=analysis_params["channel"],
-                                    name=str(i + 1),
-                                )
-                            )
-                            points_with_z.append(
-                                omero_tb.create_shape_point(
-                                    x_pos=spot[2],
-                                    y_pos=spot[1],
-                                    z_pos=spot[0],
-                                    name=str(i + 1),
-                                )
-                            )
-                            points_preview.append(
-                                omero_tb.create_shape_point(
-                                    x_pos=spot[2], y_pos=spot[1], name=str(i + 1)
-                                )
-                            )
+                    merged_image_data = np.concat(raw_image_data, merged_channel, axis=1)
 
-                        omero_tb.create_roi(conn, image, points_with_zc)
-                        if data_params["rescale_images"]:
-                            image_threshold = omero_tb.create_image_from_numpy_array(
-                                connection=conn,
-                                data=np.expand_dims(image_data, axis=(1, 2)),
-                                image_name=f"{image_name.split('.')[0]}_THR.{image_name.split('.')[1]}",
-                                image_description=f"mode-max stretched from imageid:{image.getId()}",
-                                dataset=dataset,
-                                source_image_id=image.getId(),
-                                channels_list=[analysis_params["channel"]],
-                            )
-                            image_threshold = omero_tb.get_image(
-                                conn, image_threshold.getId()
-                            )
-                            omero_tb.create_roi(conn, image_threshold, points_with_z)
-                        _spinner.update(f"Found {len(points_with_zc)} spots.")
-
-                        if data_params["create_preview_mip"]:
-                            image_data_mip = np.max(image_data, 0)
-                            image_mip = omero_tb.create_image_from_numpy_array(
-                                connection=conn,
-                                data=np.expand_dims(image_data_mip, axis=(0, 1, 2)),
-                                image_name=f"{image_name[:-3]}_preview_mip",
-                                dataset=dataset,
-                                source_image_id=image.getId(),
-                                channels_list=[analysis_params["channel"]],
-                            )
-                            image_mip = omero_tb.get_image(conn, image_mip.getId())
-                            omero_tb.create_roi(conn, image_mip, points_preview)
+                    omero_tb.create_image_from_numpy_array(
+                        connection=conn,
+                        data=merged_image_data,
+                        image_name=f"{image_name.split('.')[:-1]}_THR",
+                        dataset=dataset,
+                        source_image_id=image.getId(),
+                        # channels_list=[analysis_params["channel"]],
+                    )
 
                 _spinner.update("✅ **Analysis Complete!**")
 
